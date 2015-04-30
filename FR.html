@@ -1,0 +1,775 @@
+<html class="doc-page">
+<head>
+  <meta charset="utf-8" />
+  <title>GYP doumentation FR</title>
+  <link rel="stylesheet" type="text/css" href="/+static/doc.o4sTDNeHOzmT4lZvbmsggg.cache.css">
+</head>
+<body>
+  <div class="doc">
+    <p>﻿# GYP (Generate Your Projects) Documentation Utilisateur</p>
+
+
+<p>Mark Mentovai <a href="mailto:mark@chromium.org">mark@chromium.org</a>, Steven Knight <a href="mailto:sgk@chromium.org">sgk@chromium.org</a> <em>et al.</em></p>
+
+    <p>Modifié: 2009-05-19</p>
+<div class="toc" role="navigation"><h2>Contenu</h2>
+<div class="toc-aux"><ul><li><a href="#Introduction">Introduction</a></li><li><a href="#Skeleton-of-a-typical-Chromium-gyp-file">Squelette d'un fichier Chromium.gyp</a></li><li><a href="#Skeleton-of-a-typical-executable-target-in-a-gyp-file">Squelette pour une cible de type exécutable dans un fichier .gyp</a></li><li><a href="#Skeleton-of-a-typical-library-target-in-a-gyp-file">Squelette typique pour cible de type librairie dans un fichier .gyp</a></li><li><a href="#Use-Cases">Cas d'utilisation</a></li><ul><li><a href="#Add-new-source-files">Ajouter de nouveaux fichiers sources</a></li><li><a href="#Add-a-new-executable">Ajouter un nouvel éxecutable</a></li><li><a href="#Add-settings-to-a-target">Ajouter des paramètres pour une cible</a></li><li><a href="#Cross_compiling">Cross-compilation</a></li><li><a href="#Add-a-new-library">Ajotuer une nouvelle Librairie</a></li><li><a href="#Dependencies-between-targets">Dépendences entre deux cibles</a></li><li><a href="#Support-for-Mac-OS-X-bundles">Support pour Mac OS X bundles</a></li><li><a href="#Move-files-refactoring">Move files (refactoring)</a></li><li><a href="#Custom-build-steps">Custom build steps</a></li><li><a href="#Build-flavors">Build flavors</a></li></ul></ul></div>
+</div>
+<h2 id="Introduction">Introduction</h2>
+<p>Ce document est destiné à fournir un guide de niveau utilisateur à GYP. L'accent est mis ici sur la façon d'utiliser GYP pour accomplir des tâches spécifiques, et non sur la spécification complète du langage technique. (Pour ça, voir <a href="LanguageSpecification">LanguageSpecification</a>.)</p>
+<p>Le document ci-dessous commence avec quelques aperçus pour fournir le contexte: un aperçu de la structure d'un fichier <code>.gyp</code>
+ , un aperçu d'une cible de type exécutable dans un fichier <code>.gyp</code>
+ , un aperçu d'une cible de type librairie dans un fichier <code>.gyp</code> </p>
+<p>Après les aperçus, il y a des exemples de modèles <code>gyp</code>
+ pour différents cas d'usage.</p>
+ <p>Remarques : certains termes resteront en anglais pour éviter de trop franciser les mots et phrases, pour des soucis de compréhension. Je ne fait que traduire le texte, je ne suis pas l'auteur du contenu, si vous voulez le contenu en anglais suivez ce lien : <a href="https://chromium.googlesource.com/external/gyp/+/master/docs/UserDocumentation.md">UserDocumentation</a> </p>
+ <h2 id="Skeleton-of-a-typical-Chromium-gyp-file">Squelette d'un fichier Chromium.gyp</h2>
+<pre class="code">  {
+    'variables': {
+      .
+      .
+      .
+    },
+    'includes': [
+      '../build/common.gypi',
+    ],
+    'target_defaults': {
+      .
+      .
+      .
+    },
+    'targets': [
+      {
+        'target_name': 'target_1',
+          .
+          .
+          .
+      },
+      {
+        'target_name': 'target_2',
+          .
+          .
+          .
+      },
+    ],
+    'conditions': [
+      ['OS=="linux"', {
+        'targets': [
+          {
+            'target_name': 'linux_target_3',
+              .
+              .
+              .
+          },
+        ],
+      }],
+      ['OS=="win"', {
+        'targets': [
+          {
+            'target_name': 'windows_target_4',
+              .
+              .
+              .
+          },
+        ],
+      }, { # OS != "win"
+        'targets': [
+          {
+            'target_name': 'non_windows_target_5',
+              .
+              .
+              .
+          },
+      }],
+    ],
+  }
+</pre>
+<p>L'ensemble du fichier contient un dictionnaire Python. (C'est en fait du JSON, avec 2 petites déviations provenant de Python : les commentaires sont disponibles avec <code>#</code> 
+, et une <code>,</code>
+ (virgule) est acceptée après le dernier élément dans une liste ou un dictionnaire)</p>
+
+<p>Les différentes sections de haut-niveau dans un fichier <code>.gyp</code>
+  sont comme suit :</p>
+<p><code>'variables'</code>
+: Définitions des variables qui peuvent être interpolées et utilisées dans diverses autres parties du fichier.</p>
+<p><code>'includes'</code>
+: Une liste des autres fichiers qui seront inclus dans ce fichier. Par convention, les fichiers inclus ont <code>.gypi</code>
+  pour suffixe (gyp include).</p>
+<p><code>'target_defaults'</code>
+: Paramètres qui seront applicables à <em>toutes</em> les cibles dans ce fichier <code>.gyp</code>
+</p>
+<p><code>'targets'</code>
+: La liste des cibles pour lesquels ce fichier <code>.gyp</code>
+ peut générer des builds. Chaque cible est un dictionnaire qui contient des paramètres descrivant toutes les informations nécessaires pour build la cible.</p>
+<p><code>'conditions'</code>
+: Une liste des conditions qui peuvent modifier le contenu des items dans le dictionnaire global défini par ce ficher <code>.gyp</code>
+ basée sur les valeurs des différentes variables. Comme montré dans l'exemple au dessus, l'utilisation la plus courante de la section <code>conditions</code> dans le dictionnaire de haut niveau est d'ajouter des cibles pour des plateformes spécifiques à la liste des <code>targets</code>.</p>
+<h2 id="Skeleton-of-a-typical-executable-target-in-a-gyp-file">Squelette pour une cible de type exécutable dans un fichier .gyp</h2>
+<p>La cilbe la plus simple est probablement un programme exécutable. Voici un exemple de cible <code>executable</code>
+  qui montre les caractéristiques qui couvrent les utilisations les plus simples de gyp :</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'foo',
+        'type': 'executable',
+        'msvs_guid': '5ECEC9E5-8F23-47B6-93E0-C3B328B3BE65',
+        'dependencies': [
+          'xyzzy',
+          '../bar/bar.gyp:bar',
+        ],
+        'defines': [
+          'DEFINE_FOO',
+          'DEFINE_A_VALUE=value',
+        ],
+        'include_dirs': [
+          '..',
+        ],
+        'sources': [
+          'file1.cc',
+          'file2.cc',
+        ],
+        'conditions': [
+          ['OS=="linux"', {
+            'defines': [
+              'LINUX_DEFINE',
+            ],
+            'include_dirs': [
+              'include/linux',
+            ],
+          }],
+          ['OS=="win"', {
+            'defines': [
+              'WINDOWS_SPECIFIC_DEFINE',
+            ],
+          }, { # OS != "win",
+            'defines': [
+              'NON_WINDOWS_DEFINE',
+            ],
+          }]
+        ],
+      },
+    ],
+  }
+</pre>
+<p>Les paramètres de haut-niveau dans la cible inclus:</p>
+<p><code>'target_name'</code>
+: Le nom par lequel la cible devrait être connue, ce qui devrait être unique à travers tous les fichiers <code>.gyp</code>. Ce nom sera utilisé comme nom de projet dans la solution Visual Studio générée, comme le nom de la cible dans la configuration de XCode générée, ainsi que comme l'alias de la construction de cette cible dans la ligne de commande de la configuration des SCons générée.</p>
+<p><code>'type'</code>
+: Mettre <code>executable</code>
+, logique !</p>
+<p><code>'msvs_guid'</code>
+: CE N'EST QUE TEMPORAIRE. Ceci est une des valeurs GUID codées qui seront utilisés dans le fichier de solution Visual Studio généré(s). Cela nous permet de vérifier dans un fichier chrome.sln s'il interagit avec les fichiers de projet gyp généré. Une fois que tout dans Chromium a été généré par gyp, il ne sera plus important que les GUIDs restent constant à chaques génération et nous allons nous débarasser de ces paramètres.</p>
+<p><code>'dependencies'</code>
+: Cette section liste les autres cibles dont la cible dépends. Les fichiers gyp générés vont garantir que les autres cibles sont build avant cette cible. Toutes les cibles dans <code>dependencies</code> seront reliées à cette cible. Les différents paramètres (<code>defines</code>, <code>include_dirs</code>, etc.) listés dans la section <code>direct_dependent_settings</code> des cibles dans cette liste "will be applied to how this target is built and linked." Voir la discussion complète de <code>direct_dependent_settings</code> en dessous.</p></p>
+<p><code>'defines'</code>
+: Les définitions de préprocesseur C qui seront transmis dans les lignes de commande de compilation (en utilisant les options -D ou / D).</p>
+<p><code>'include_dirs'</code>
+: Les répertoires dans lesquels figurent les fichiers d'entête. Ces derniers seront transmis dans les lignes de commande de compilation (en utilisant les options -I ou / I).</p>
+<p><code>'sources'</code>
+: Les fichiers sources pour cet cible.</p>
+<p><code>'conditions'</code>
+: Un bloc de conditions qui seront évaluées pour mettre jour les différents paramètres dans le dictionnaire cible..</p>
+<h2 id="Skeleton-of-a-typical-library-target-in-a-gyp-file">Squelette typique pour cible de type librairie dans un fichier .gyp</h2>
+<p>La grande majorité des objectifs sont des librairies. Voici un exemple d'une cible de type librairies, y compris les fonctionnalités supplémentaires qui devraient couvrir la plupart des besoins des librairies:</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'foo',
+        'type': '&lt;(library)'
+        'msvs_guid': '5ECEC9E5-8F23-47B6-93E0-C3B328B3BE65',
+        'dependencies': [
+          'xyzzy',
+          '../bar/bar.gyp:bar',
+        ],
+        'defines': [
+          'DEFINE_FOO',
+          'DEFINE_A_VALUE=value',
+        ],
+        'include_dirs': [
+          '..',
+        ],
+        'direct_dependent_settings': {
+          'defines': [
+            'DEFINE_FOO',
+            'DEFINE_ADDITIONAL',
+          ],
+          'linkflags': [
+          ],
+        },
+        'export_dependent_settings': [
+          '../bar/bar.gyp:bar',
+        ],
+        'sources': [
+          'file1.cc',
+          'file2.cc',
+        ],
+        'conditions': [
+          ['OS=="linux"', {
+            'defines': [
+              'LINUX_DEFINE',
+            ],
+            'include_dirs': [
+              'include/linux',
+            ],
+          ],
+          ['OS=="win"', {
+            'defines': [
+              'WINDOWS_SPECIFIC_DEFINE',
+            ],
+          }, { # OS != "win",
+            'defines': [
+              'NON_WINDOWS_DEFINE',
+            ],
+          }]
+        ],
+    ],
+  }
+</pre>
+<p>Les entrées possibles dans une cible de type librairie sont en grande partie les mêmes que celles qui peuvent être spécifié pour une cible exécutable (<code>defines</code>
+, <code>include_dirs</code>
+, etc.). Les différences incluent:</p>
+<p><code>'type'</code>
+: Cela devrait presque toujours être réglé à ‘&lt;(library)’, qui permet à l'utilisateur de définir si les bibliothèques doivent être build static ou shared. (Sous Linux, au moins, la liaison avec les bibliothèques shared économise du temps.) Si il est nécessaire de cerner le type de bibliothèque à être build le <code>type</code> peut être réglé explicitement à <code>static_library</code>
+ ou <code>shared_library</code>
+.</p>
+<p><code>'direct_dependent_settings'</code>
+: (Note : cette partie peut être traduite de plusieurs façon, à vous de traduire à votre sauce !) : This defines the settings that will be applied to other targets that <em>directly depend</em> on this target–that is, that list <em>this</em> target in their <code>'dependencies'</code>
+ setting. This is where you list the <code>defines</code>
+, <code>include_dirs</code>
+, <code>cflags</code>
+ and <code>linkflags</code>
+ that other targets that compile or link against this target need to build consistently.</p>
+<p><code>'export_dependent_settings'</code>
+: Cette liste énumère les cibles dont <code>direct_dependent_settings</code> 
+ devrait être “transmis” à d'autres cibles qui utilisent (depend on) cette liste. <code>TODO:  expand on this description.</code>
+</p>
+<h2 id="Use-Cases">Cas d'utilisation</h2>
+<p>Ces cas d'utilisation sont destinées à couvrir les actions les plus courantes effectuées par les développeurs utilisant GYP.</p>
+<p>Notez que ces exemples ne sont pas pleinement opérationnel (ou bien ils seraient beaucoup trop long). Chaque exemple contient la plupart du temps seulement les mots-clés et les paramètres pertinents pour l'exemple, avec peut-être quelques mots clés supplémentaires pour le contexte. Le but est d'essayer de montrer les sections spécifiques auquels vous devez faire attention lorsque vosu faites quelque chose. [NOTE: si une utilisation pratique montre que ces exemples sont source de confusion sans contexte supplémentaire,  ajouter ce qui est nécessaire pour clarifier les choses.]</p>
+<h3 id="Add-new-source-files">Ajouter de nouveaux fichiers sources</h3>
+<p>Il existe des modèles similaires mais légèrement différents entre l'ajout d'un fichier source tout-plateforme et l'ajout d'un fichier source qui se build seulement sur certaines des plates-formes supportées.</p>
+<h4>Ajouter une source qui se build sur toutes les plateformes</h4>
+<p><strong>Le plus simple cas possible </strong>: Vous ajoutez un fichier que peut se build sur toutes les platformes.</p>
+<p>Ajoutez juste les fichiers à la liste <code>sources</code>
+ du dictionnaire approprié dans la liste <code>targets</code> :</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'my_target',
+        'type': 'executable',
+        'sources': [
+          '../other/file_1.cc',
+          'new_file.cc',
+          'subdir/file3.cc',
+        ],
+      },
+    ],
+  },
+</pre>
+<p>Le chemin des fichiers est relatif au directoire ou se trouve le fichier <code>.gyp</code></p>
+<p>Gardez cette liste triée par ordre alphabétique (sauf  si il y a une très, très, <em>très</em> bonne raison de ne pas le faire).</p>
+<h4>Ajouter des fichiers sources pour des plateformes spécifiques</h4>
+<h5>Votre fichier pour une plateforme spécifique est nommé <code>*_linux.{ext}</code>
+, <code>*_mac.{ext}</code>
+, <code>*_posix.{ext}</code>
+ ou <code>*_win.{ext}</code>
+</h5><p>La façon la plus facile pour ajouter un fichier de source spécifique à une plateforme, en supposant que vous ajoutez un tout nouveau fichier et que vous devez le nommer, c'est d'utiliser un des suffixes standard suivants :</p>
+<ul><li><code>_linux</code>
+ (e.g. <code>foo_linux.cc</code>
+)</li><li><code>_mac</code>
+ (e.g. <code>foo_mac.cc</code>
+)</li><li><code>_posix</code>
+ (e.g. <code>foo_posix.cc</code>
+)</li><li><code>_win</code>
+ (e.g. <code>foo_win.cc</code>
+)</li></ul><p>Ajoutez simplement le ficher à la liste <code>sources</code>
+ de la librairie appropriée de la liste <code>targets</code>
+ comme vous le feriez pour tout autre fichier source.</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'foo',
+        'type': 'executable',
+        'sources': [
+          'independent.cc',
+          'specific_win.cc',
+        ],
+      },
+    ],
+  },
+</pre>
+<p>Les fichiers Chromium <code>.gyp</code>
+ ont tous les bonnes entrées de <code>conditions</code> pour filtrer les fichers qui ne sont pas approprié à la plateforme actuelle. Dans l'exemple ci-dessus le fichier <code>specific_win.cc</code>
+ sera automatiquement supprimé de la liste des sources pour les build non-Windows.</p>
+<h5>Votre fichier pour une plateforme spécifique n'utilise pas un modèle déjà défini</h5><p>Si votre fichier ne contient pas une sous-chaine <code>*_{linux,mac,posix,win}</code>
+ (ou un autre modèle qui est déjà dans <code>conditions</code>
+ pour la cible), et que vous ne pouvez pas changer le nom du fichier, il y a deux solutions possibles.</p>
+<p><strong>Préférée</strong>: Ajoutez le fichier à la liste <code>sources</code>
+ du dictionnaire approprié dans la liste <code>targets</code>. Ajoutez une dection <code>conditions</code>
+ sapproprié pour exclure certains nom de fichiers :</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'foo',
+        'type': 'executable',
+        'sources': [
+          'linux_specific.cc',
+        ],
+        'conditions': [
+          ['OS != "linux"', {
+            'sources!': [
+              # Linux-only; exclude on other platforms.
+              'linux_specific.cc',
+            ]
+          }[,
+        ],
+      },
+    ],
+  },
+</pre>
+<p>Malgré le listage en double, ce qui précède est généralement préféré parce que la liste des <code>sources</code> contient une liste globale de toutes les sources utiles pour toutes les plateformes avec un tri cohérente sur toutes les plateformes.</p>
+<p><strong>Non-préférée</strong>: Dans certaines situations, il pourrait être judicieux d'énumérer un fichier spécifique à la plateforme seulement dans la section des <code>conditions</code>
+ qui <em>l'inclut</em> spécifiquement dans la liste des <code>sources</code>
+</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'foo',
+        'type': 'executable',
+        'sources': [],
+        ['OS == "linux"', {
+          'sources': [
+            # Only add to sources list on Linux.
+            'linux_specific.cc',
+          ]
+        }],
+      },
+    ],
+  },
+</pre>
+<p>Les deux exemples ci-dessus finissent par générer des builds équivalents, avec la petite exception que les listes <code>sources</code> listeront les fichiers dans des ordres différents. (Le premier exemple défini explicitement où <code>linux_specific.cc</code>
+ apparait dans la liste, peut-être dnas le milieu, tandis que le second exemple sera toujours cloué à la fin de la liste.)</p>
+<p><strong>Inclure ou exclure des fichiers en utilisant des modèles</strong>: Il a des façons plus compliquées pour construire une liste <code>sources</code>
+basée sur des modèles. Voir <code>TODO(sgk)</code>
+ en dessous.  (wtf ??)</p>
+<h3 id="Add-a-new-executable">Ajouter un nouveau exécutable</h3>
+<p>Un programme exécutable est probablement le plus simple type pour les cibles, il faut : une liste de fichiers sources, des paramètres pour compilateur/linker (probablement différents selon les plateformes), et des librairies cibles qui en dépendent et qui seront utilisées dans le link final.</p>
+<h4>Ajouter un exécutable qui se build sur tout les plateformes</h4>
+<p>Ajouter un dictionnaire définissant la nouvelle cible exécutable dans la liste<code>targets</code>
+ dans le fichier <code>.gyp</code>
+ approprié. Exemple:</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'new_unit_tests',
+        'type': 'executable',
+        'defines': [
+          'FOO',
+        ],
+        'include_dirs': [
+          '..',
+        ],
+        'dependencies': [
+          'other_target_in_this_file',
+          'other_gyp2:target_in_other_gyp2',
+        ],
+        'sources': [
+          'new_additional_source.cc',
+          'new_unit_tests.cc',
+        ],
+      },
+    ],
+  }
+</pre>
+<h4>Ajouter un exécutable spécifique à une plateforme</h4>
+<p>Ajouter un dictionnaire définissant la nouvelle cible exécutable à la liste<code>targets</code>
+ avec une section <code>conditions</code>
+ approriée pour la plateforme. La section <code>conditions</code> doit être jumelle la liste <code>targets</code> :</p>
+<pre class="code">  {
+    'targets': [
+    ],
+    'conditions': [
+      ['OS=="win"', {
+        'targets': [
+          {
+            'target_name': 'new_unit_tests',
+            'type': 'executable',
+            'defines': [
+              'FOO',
+            ],
+            'include_dirs': [
+              '..',
+            ],
+            'dependencies': [
+              'other_target_in_this_file',
+              'other_gyp2:target_in_other_gyp2',
+            ],
+            'sources': [
+              'new_additional_source.cc',
+              'new_unit_tests.cc',
+            ],
+          },
+        ],
+      }],
+    ],
+  }
+</pre>
+<h3 id="Add-settings-to-a-target">Ajouter des paramètres à une cible</h3>
+<p>Il y a différents types de paramètres qui peuvent être définis pour chaque ciblé donnée. </p>
+<h4>Ajouter de nouvelles définitions de préprocesseur (<code>-D</code>
+ ou <code>/D</code>
+ flags)</h4>
+<p>Les nouvelles définitions de préprocesseuravec le paramètre <code>defines</code> :</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'existing_target',
+        'defines': [
+          'FOO',
+          'BAR=some_value',
+        ],
+      },
+    ],
+  },
+</pre>
+<p>Elles peuvent être directement spécifiées dans les paramètres de la cible, comme dans l'exemple ci-dessus, ou dans la section <code>conditions</code>.</p>
+<h4>Ajouter un nouveau répertoire pour les includes (<code>-I</code>
+ ou <code>/I</code>
+ flags)</h4>
+<p>Les nouveux répertoires sont ajoutés avec le paramètre <code>include_dirs</code>:</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'existing_target',
+        'include_dirs': [
+          '..',
+          'include',
+        ],
+      },
+    ],
+  },
+</pre>
+<p>Ils peuvent être directement spécifiés dans les paramètres de la cible, comme dans l'exemple ci-dessus, ou dans la section <code>conditions</code>.</p>
+<h4>Ajouter de nouveaux compiler flags</h4>
+<p>De nouveaux compiler flags peuvent être ajoutés avec le paramètre <code>cflags</code> :</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'existing_target',
+        'conditions': [
+          ['OS=="win"', {
+            'cflags': [
+              '/WX',
+            ],
+          }, { # OS != "win"
+            'cflags': [
+              '-Werror',
+            ],
+          }],
+        ],
+      },
+    ],
+  },
+</pre>
+<p>Parce que c'est flags seront spécifiques au linker impliqué actuel, ils seront presque toujours paramétrés avec une section <code>conditions</code>.</p>
+<h4>Ajouter de nouveux linker flags</h4>
+<p>Paramétrer les linker flags dépend de l'OS. Sous Linux et la plupart des non-mac posix systèmes, ils peuvent être ajoutés avec le paramètre <code>ldflags</code>:</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'existing_target',
+        'conditions': [
+          ['OS=="linux"', {
+            'ldflags': [
+              '-pthread',
+            ],
+          }],
+        ],
+      },
+    ],
+  },
+</pre>
+<p>Parce que c'est flags seront spécifiques au linker impliqué actuel, ils seront presque toujours paramétrés avec une section <code>conditions</code>.</p>
+<p>Sous OS X, les paramètres du linker sont fait via <code>xcode_settings</code>
+, sous Windows via <code>msvs_settings</code>
+.</p>
+<h4>Exclure des paramètres pour une plateforme</h4>
+<p>N'importe quel mot clé pour les paramètres (<code>defines</code>
+, <code>include_dirs</code>, etc.) a une forme correspondante avec un <code>!</code> (point d'exclamation) pour enelver les valeurs d'un paramètre. Un exemple utile pour ça est d'enlever le flag de Linux <code>-Werror</code>
+ des paramètres globaux définis dans <code>build/common.gypi</code>
+:</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'third_party_target',
+        'conditions': [
+          ['OS=="linux"', {
+            'cflags!': [
+              '-Werror',
+            ],
+          }],
+        ],
+      },
+    ],
+  },
+</pre>
+<h3 id="Cross_compiling">Cross-compiling</h3>
+<p>GYP has some (relatively limited) support for cross-compiling.</p>
+<p>If the variable <code>GYP_CROSSCOMPILE</code>
+ or one of the toolchain-related variables (like <code>CC_host</code>
+ or <code>CC_target</code>
+) is set, GYP will think that you wish to do a cross-compile.</p>
+<p>When cross-compiling, each target can be part of a “host” build, a “target” build, or both. By default, the target is assumed to be (only) part of the “target” build. The ‘toolsets’ property can be set on a target to change the default.</p>
+<p>A target’s dependencies are assumed to match the build type (so, if A depends on B, by default that means that a target build of A depends on a target build of B). You can explicitly depend on targets across toolchains by specifying “#host” or “#target” in the dependencies list. If GYP is not doing a cross-compile, the “#host” and “#target” will be stripped as needed, so nothing breaks.</p>
+<h3 id="Add-a-new-library">Ajouter une nouvelle librairie</h3>
+<h4>Ajouter une libraire que se build sur toutes les plateformes</h4>
+<p>Ajoutez le dictionnaire définissant la nouvelle librairie à la liste <code>targets</code>
+ dans le fichier <code>.gyp</code>
+ approprié. Exemple:</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'new_library',
+        'type': '&lt;(library)',
+        'defines': [
+          'FOO',
+          'BAR=some_value',
+        ],
+        'include_dirs': [
+          '..',
+        ],
+        'dependencies': [
+          'other_target_in_this_file',
+          'other_gyp2:target_in_other_gyp2',
+        ],
+        'direct_dependent_settings': {
+          'include_dirs': '.',
+        },
+        'export_dependent_settings': [
+          'other_target_in_this_file',
+        ],
+        'sources': [
+          'new_additional_source.cc',
+          'new_library.cc',
+        ],
+      },
+    ],
+  }
+</pre>
+<p>L'utilisation de la variable <code>&lt;(library)</code>
+ doit être le paramètre de <code>type</code>
+ par défaut pour la plupart des librairies cibles, car il permet au déveleppeur de choisir, pour <code>gyp</code>
+ ,de build des librairies static ou shared. (Building with shared libraries saves a <em>lot</em> of link time on Linux.)</p>
+<p>Il peut être nécessaire de build une librairie spécifique comme un type fixe. Le champ <code>type</code> peut être modifié comme il faut. Pour une librairie static :</p>
+<pre class="code">        'type': 'static_library',
+</pre>
+<p>Pour une librairie shared :</p>
+<pre class="code">        'type': 'shared_library',
+</pre>
+<h4>Ajouter une librairie spécifique à une plateforme</h4>
+<p>Ajouter un dictionnaire définissant la nouvelle cible exécutable à la liste<code>targets</code>
+ avec une section <code>conditions</code>
+ approriée pour la plateforme. La section <code>conditions</code> doit être jumelle la liste <code>targets</code> :</p>
+<pre class="code">  {
+    'targets': [
+    ],
+    'conditions': [
+      ['OS=="win"', {
+        'targets': [
+          {
+            'target_name': 'new_library',
+            'type': '&lt;(library)',
+            'defines': [
+              'FOO',
+              'BAR=some_value',
+            ],
+            'include_dirs': [
+              '..',
+            ],
+            'dependencies': [
+              'other_target_in_this_file',
+              'other_gyp2:target_in_other_gyp2',
+            ],
+            'direct_dependent_settings': {
+              'include_dirs': '.',
+            },
+            'export_dependent_settings': [
+              'other_target_in_this_file',
+            ],
+            'sources': [
+              'new_additional_source.cc',
+              'new_library.cc',
+            ],
+          },
+        ],
+      }],
+    ],
+  }
+</pre>
+<h3 id="Dependencies-between-targets">Dépendances entre les cibles</h3>
+<p>GYP fournit des primitives utiles pour établir des dépendances entre les cibles, qui doivent être configurées dans les situations suivantes.</p>
+<h4>Linking avec une autre librairie cible</h4>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'foo',
+        'dependencies': [
+          'libbar',
+        ],
+      },
+      {
+        'target_name': 'libbar',
+        'type': '&lt;(library)',
+        'sources': [
+        ],
+      },
+    ],
+  }
+</pre>
+<p>Notez que si la librairie cible est dans un fichier <code>.gyp</code>
+ différent, vous devez spécifier le chemin pour l'autre fichier <code>.gyp</code>, relatif à au répertoire de fichier <code>.gyp</code>:</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'foo',
+        'dependencies': [
+          '../bar/bar.gyp:libbar',
+        ],
+      },
+    ],
+  }
+</pre>
+<p>Ajouter une librairie oblige souvent à mettre jour plusieurs fichiers <code>.gyp</code>
+ , ajoutant la cible au fichier <code>.gyp</code>
+ approprié (peut être un fichier <code>.gyp</code> ajoutés récemment), et mettant à jour les cibles dans l'autre fichier <code>.gyp</code>
+ qui dépend (link with) de la nouvelle librairie.</p>
+<h4>Compiler avec des flags nécessaires pour une dépendance de la librairie cible </h4>
+<p>Nous devons build une librairie (souvent une librairie tierce) avec des définitions de préprocesseurs spécifiques ou des flags en ligne de commande, et on a besoin d'assurer que cette cible dépend de la librairie build avec les mêmes paramètres. cette situation est gérée par un block <code>direct_dependent_settings</code>
+:</p>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'foo',
+        'type': 'executable',
+        'dependencies': [
+          'libbar',
+        ],
+      },
+      {
+        'target_name': 'libbar',
+        'type': '&lt;(library)',
+        'defines': [
+          'LOCAL_DEFINE_FOR_LIBBAR',
+          'DEFINE_TO_USE_LIBBAR',
+        ],
+        'include_dirs': [
+          '..',
+          'include/libbar',
+        ],
+        'direct_dependent_settings': {
+          'defines': [
+            'DEFINE_TO_USE_LIBBAR',
+          ],
+          'include_dirs': [
+            'include/libbar',
+          ],
+        },
+      },
+    ],
+  }
+</pre>
+<p>Dans l'exemple ci-dessus, les sources de l'exécutable <code>foo</code> seront compilées avec les options <code>-DDEFINE_TO_USE_LIBBAR -Iinclude/libbar</code>
+, parce que ces paramètres sont listés dans le block <code>direct_dependent_settings</code>
+</p>
+<p>Notez que ces paramètres devront probablement être reproduit dans les propres paramètres de la librairie cible, comme ça, la librairie sera build avec les mêmes options. Ceci ne n'empêche pas la cible de définir des options supplémentaires pour son usage "personnel" quand il compilera avec ses propres fichiers source. (Dans l'exemple ci dessus, c'est la définition de <code>LOCAL_DEFINE_FOR_LIBBAR</code>, et l'entrée <code>..</code>
+ dans la liste <code>include_dirs</code>)</p>
+<h4>When a library depends on an additional library at final link time</h4>
+<pre class="code">  {
+    'targets': [
+      {
+        'target_name': 'foo',
+        'type': 'executable',
+        'dependencies': [
+          'libbar',
+        ],
+      },
+      {
+        'target_name': 'libbar',
+        'type': '&lt;(library)',
+        'dependencies': [
+          'libother'
+        ],
+        'export_dependent_settings': [
+          'libother'
+        ],
+      },
+      {
+        'target_name': 'libother',
+        'type': '&lt;(library)',
+        'direct_dependent_settings': {
+          'defines': [
+            'DEFINE_FOR_LIBOTHER',
+          ],
+          'include_dirs': [
+            'include/libother',
+          ],
+        },
+      },
+    ],
+  }
+</pre>
+<h3 id="Support-for-Mac-OS-X-bundles">Support for Mac OS X bundles</h3>
+<p>gyp supports building bundles on OS X (.app, .framework, .bundle, etc). Here is an example of this:</p>
+<pre class="code">    {
+      'target_name': 'test_app',
+      'product_name': 'Test App Gyp',
+      'type': 'executable',
+      'mac_bundle': 1,
+      'sources': [
+        'main.m',
+        'TestAppAppDelegate.h',
+        'TestAppAppDelegate.m',
+      ],
+      'mac_bundle_resources': [
+        'TestApp/English.lproj/InfoPlist.strings',
+        'TestApp/English.lproj/MainMenu.xib',
+      ],
+      'link_settings': {
+        'libraries': [
+          '$(SDKROOT)/System/Library/Frameworks/Cocoa.framework',
+        ],
+      },
+      'xcode_settings': {
+        'INFOPLIST_FILE': 'TestApp/TestApp-Info.plist',
+      },
+    },
+</pre>
+<p>The <code>mac_bundle</code>
+ key tells gyp that this target should be a bundle. <code>executable</code>
+ targets get extension <code>.app</code>
+ by default, <code>shared_library</code>
+ targets get <code>.framework</code>
+ – but you can change the bundle extensions by setting <code>product_extension</code>
+ if you want. Files listed in <code>mac_bundle_resources</code>
+ will be copied to the bundle’s <code>Resource</code>
+ folder of the bundle. You can also set <code>process_outputs_as_mac_bundle_resources</code>
+ to 1 in actions and rules to let the output of actions and rules be added to that folder (similar to <code>process_outputs_as_sources</code>
+). If <code>product_name</code>
+ is not set, the bundle will be named after <code>target_name</code>
+as usual.</p>
+<h3 id="Move-files-refactoring">Move files (refactoring)</h3>
+<p>TODO(sgk)</p>
+<h3 id="Custom-build-steps">Custom build steps</h3>
+<p>TODO(sgk)</p>
+<h4>Adding an explicit build step to generate specific files</h4>
+<p>TODO(sgk)</p>
+<h4>Adding a rule to handle files with a new suffix</h4>
+<p>TODO(sgk)</p>
+<h3 id="Build-flavors">Build flavors</h3>
+<p>TODO(sgk)</p>
+</div>
+<div class="footer-break"></div>
+<div class="footer-line"><div class="nav-aux"><ul><li><a href="/external/gyp/+show/master/docs/UserDocumentation.md">source</a></li><li><a href="/external/gyp/+log/master/docs/UserDocumentation.md">log</a></li><li><a href="/external/gyp/+blame/master/docs/UserDocumentation.md">blame</a></li></ul><div class="gitiles-att">Powered by <a href="https://code.google.com/p/gitiles/">Gitiles</a></div>
+</div>
+</div>
+</body></html>
