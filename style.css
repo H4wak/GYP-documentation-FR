@@ -1,0 +1,22 @@
+.code {
+  color: #000;
+  background-color: #B2C2D1;
+  font: 13px/1.54 "courier new",courier,monospace;
+}
+.doc {
+  color: #444;
+  font-size: 15px;
+  line-height: normal;
+}
+p {
+  display: block;
+  -webkit-margin-before: 1em;
+  -webkit-margin-after: 1em;
+  -webkit-margin-start: 0px;
+  -webkit-margin-end: 0px;
+}
+
+.doc code{
+  color: red;
+  font: 13px/1.54 "courier new",courier,monospace;
+  }
